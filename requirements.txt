@@ -1,2 +1,4 @@
 jupyter == 1.0.0
 jupyter_contrib_nbextensions == 0.3.3
+click == 6.7
+pyyaml == 3.12
