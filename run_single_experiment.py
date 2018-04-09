@@ -25,15 +25,19 @@ import uuid
         type=click.Choice(['piecewise-constant', 'clr-cosine',
             'clr-triangle', 'clr-step']),
         required=True)
+@click.option('--batch-multiplier', '-m', type=click.INT, default=1)
+@click.option('--batch-size', '-s', type=click.INT, default=500)
 def single(initial_learning_rate, experiment_directory,
-        yaml_file, rate_schedule):
+        yaml_file, rate_schedule, batch_size, batch_multiplier):
     os.makedirs(experiment_directory, exist_ok=True)
 
     model = BasicClassifier.new_from_yaml_file(yaml_file)
 
     training_generator = DataGenerator.from_pytorch(
+            batch_size=batch_size,
             dataset_class=datasets.FashionMNIST)
     test_generator = DataGenerator.from_pytorch(
+            batch_size=batch_size,
             dataset_class=datasets.FashionMNIST,
             train=False)
 
@@ -67,15 +71,18 @@ def single(initial_learning_rate, experiment_directory,
     rate_controller = rcs[rate_schedule]
 
     if 'clr' in rate_schedule:
-        trainer.multi_train(num_cycles=10, cycle_multiplier=1.5,
-            rate_controller=rate_controller)
+        trainer.multi_train(num_cycles=4, cycle_multiplier=1.5,
+            rate_controller=rate_controller,
+            batch_multiplier=batch_multiplier)
     else:
-        trainer.train(num_epochs=250, rate_controller=rate_controller)
+        trainer.train(num_epochs=20, rate_controller=rate_controller,
+            batch_multiplier=batch_multiplier)
 
     fig = trainer.monitor.dataframe_monitor.plot(skip_first=100,
         smooth_window=30, metrics=['classification_accuracy', 'loss'])
     unique_part = str(uuid.uuid4())[-5:]
-    name = f'{rate_schedule}-{initial_learning_rate}-{unique_part}'
+    ebs = batch_size * batch_multiplier
+    name = f'{rate_schedule}-{initial_learning_rate}-{unique_part}_{ebs}'
     fig.savefig(os.path.join(experiment_directory,
         f'{name}-training-history.png'))
 
@@ -92,8 +99,8 @@ def single(initial_learning_rate, experiment_directory,
             as csvfile:
         writer = csv.writer(csvfile, delimiter='\t')
         if write_header:
-            writer.writerow(['rate_schedule', 'initial_learning_rate', 'acc'])
-        writer.writerow([rate_schedule, initial_learning_rate, acc])
+            writer.writerow(['rate_schedule', 'initial_learning_rate', 'acc', 'batch_size', 'batch_multiplier', 'effective_batch_size'])
+        writer.writerow([rate_schedule, initial_learning_rate, acc, batch_size, batch_multiplier, ebs])
 
 
 if __name__ == '__main__':
