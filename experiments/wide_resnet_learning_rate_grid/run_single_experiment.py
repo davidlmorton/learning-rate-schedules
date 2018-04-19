@@ -24,7 +24,8 @@ import uuid
 @click.option('--dataset-class', '-c', type=click.Choice(['MNIST',
         'FashionMNIST', 'CIFAR10']), default='CIFAR10')
 @click.option('--rate-schedule', '-r',
-        type=click.Choice(['piecewise-constant', 'triangle']),
+        type=click.Choice(['piecewise-constant', 'piecewise-constant-long',
+            'triangle']),
         required=True)
 @click.option('--batch-multiplier', '-m', type=click.INT, default=1)
 @click.option('--batch-size', '-s', type=click.INT, default=100)
@@ -82,14 +83,18 @@ def single(batch_multiplier, batch_size, dataset_class, depth,
             min_learning_rate=min_learning_rate),
         'piecewise-constant': rate_controllers.ConstantRateController(
             learning_rate=max_learning_rate,
-            num_drops=3, movement_window=800, movement_threshold=0.15),
+            num_drops=3, movement_window=800//batch_multiplier, movement_threshold=0.15),
+        'piecewise-constant-long': rate_controllers.ConstantRateController(
+            learning_rate=max_learning_rate,
+            num_drops=3, movement_window=8000//batch_multiplier, movement_threshold=0.15),
     }
     rate_controller = rcs[rate_schedule]
 
-    trainer.train(num_epochs=num_epochs, rate_controller=rate_controller,
-        batch_multiplier=batch_multiplier)
+    trainer.train(num_epochs=num_epochs*batch_multiplier,
+            rate_controller=rate_controller,
+            batch_multiplier=batch_multiplier)
 
-    num_steps = int(trainer.monitor.dataframe_monitor.df.iloc[-1].name)
+    num_steps = len(trainer.monitor.dataframe_monitor.df)
     num_epochs = num_steps / len(trainer.training_data_generator)
 
     fig = trainer.monitor.dataframe_monitor.plot(skip_first=500,
